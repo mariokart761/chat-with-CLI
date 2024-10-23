@@ -1,6 +1,12 @@
 from tools.chat_assistant import ChatAssistant, ChatInterface
 from g4f.client import Client
+import asyncio
 import argparse
+
+# to slove RuntimeWarning 
+import asyncio
+from asyncio import WindowsSelectorEventLoopPolicy
+asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 def main(instance, api_key):
     ca = ChatAssistant(api_key=api_key)
