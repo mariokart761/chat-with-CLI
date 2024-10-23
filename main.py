@@ -1,6 +1,5 @@
 from tools.chat_assistant import ChatAssistant, ChatInterface
 from g4f.client import Client
-import asyncio
 import argparse
 
 # to slove RuntimeWarning 
