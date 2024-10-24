@@ -1,7 +1,13 @@
 from openai import OpenAI
 from g4f.client import Client
-import os
 from termcolor import colored
+from typing import List, Optional
+import os
+
+# to solve RuntimeWarning 
+import asyncio
+from asyncio import WindowsSelectorEventLoopPolicy
+asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 class ChatAssistant:
     """
@@ -17,31 +23,52 @@ class ChatAssistant:
         可預先配置一些prompt
         e.g. `initial_messages=[{"role": "system", "content": "You are an IT expert."}]`
     """
-    
-    def __init__(self, api_key: str = None, init_messages: list = None):
-        self._client = OpenAI(api_key=api_key or os.environ.get('OPENAI_API_KEY'))
+    INSTANCE = {
+        'G4F': 'g4f',
+        'OPENAI': 'openai'
+    }
+        
+    def __init__(self, 
+                 api_key: Optional[str] = None,
+                 init_messages: Optional[List[dict]] = None,
+                 instance: str = 'g4f'):
+        self.set_instance(api_key, instance)
         self.global_msg = init_messages or []
         self._model = 'gpt-4o-mini'
-        
+    
     @property
-    def client(self):
-        return self._client
+    def client(self) -> Optional[Client]:
+        return getattr(self, '_client', None)
 
     @client.setter
-    def client(self, value):
-        if not isinstance(value, OpenAI) and not isinstance(value, Client):
+    def client(self, value: Client):
+        if not isinstance(value, (OpenAI, Client)):
             raise ValueError("client 必須是 OpenAI 或 G4F 實例")
         self._client = value
         
     @property
-    def model(self):
+    def model(self) -> str:
         return self._model
 
     @model.setter
-    def model(self, value):
+    def model(self, value: str):
         self._model = value
+        
+    def check_instance(self, instance: str):
+        if instance not in self.INSTANCE.values():
+            supported_instances = ", ".join(self.INSTANCE.values())
+            raise ValueError(f"不支援的實例，請使用以下之一: {supported_instances}")
+        
+    def set_instance(self, api_key: Optional[str], instance: str):
+        self.check_instance(instance)
+        client_classes = {
+            self.INSTANCE['G4F']: Client(),
+            self.INSTANCE['OPENAI']: OpenAI(api_key=api_key or os.environ.get('OPENAI_API_KEY'))
+        }
+        self._client = client_classes[instance]
+        print(colored(f'[INFO] instance: {instance}', "light_cyan"))
 
-    def get_openai_response(self, messages: list):
+    def get_openai_response(self, messages: List[dict]):
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages
@@ -53,23 +80,26 @@ class ChatAssistant:
         gpt_response = self.get_openai_response(self.global_msg)
         ast_msg = gpt_response.choices[0].message.content
         self.global_msg.append({"role": "assistant", "content": ast_msg})
-        
         return ast_msg
 
-    def save_to_file(self, content, filename: str = 'output.md'):
-        if not os.path.exists('saved_file'):
-            os.makedirs('saved_file')
-        with open(f'./saved_file/{filename}', 'w', encoding='utf-8') as f:
-            f.write(content)
-        print(colored(f"\n[INFO] Assistant回覆已存至 ./saved_file/{filename}","light_cyan"))
+    def save_to_file(self, content: str, filename: str = 'output.md'):
+        os.makedirs('saved_file', exist_ok=True)
+        file_path = f'./saved_file/{filename}'
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(colored(f"\n[INFO] Assistant回覆已存至 {file_path}", "light_cyan"))
+        except Exception as e:
+            print(f"[ERROR] 無法儲存文件: {e}")
+
         
 
 class ChatInterface:
     COMAND = {
-        "EXIT": "--exit",
-        "SAVE": "--save",
-        # "BACK": "--back",
-        # "SWITCH_MODEL" : "--model"
+        'EXIT': '--exit',
+        'SAVE': '--save',
+        # 'BACK': '--back',
+        # 'SWITCH_MODEL' : '--model'
     }
 
     def __init__(self, assistant: 'ChatAssistant'):
